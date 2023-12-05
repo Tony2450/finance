@@ -415,6 +415,3 @@ def sell():
         "SELECT symbol FROM portfolio WHERE userid = ? AND NOT count = 0", userid
     )
     return render_template("sell.html", portfoliostocks=portfoliostocks)
-
-if __name__ == '__main__':
-    app.run(debug=True)
