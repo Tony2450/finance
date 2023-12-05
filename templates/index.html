@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Index
+{% endblock %}
+
+{% block main %}
+    <form class="mb-4" action="/" method="post">
+        <div class="mb-3">
+            <select autocomplete="off" autofocus class="form-select mx-auto w-auto" id="addcash" name="addcash">
+                <option disabled selected>Add Cash</option>
+                <option value="1000">$1000</option>
+                <option value="10000">$10000</option>
+                <option value="50000">$50000</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" type="submit">Add Cash</button>
+    </form>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th class="text-start">Symbol</th>
+                <th class="text-start">Name</th>
+                <th class="text-end">Shares</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stock in portfoliostocks %}
+            <tr>
+                <td class="text-start">{{ stock["symbol"] }}</td>
+                <td class="text-start">{{ stock["symbol"] }}</td>
+                <td class="text-end">{{ stock["count"] }}</td>
+                <td class="text-end">{{ stock["stockprice"] }}</td>
+                <td class="text-end">{{ stock["stocktotal"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td class="border-0 fw-bold text-end" colspan="4">Cash</td>
+                <td class="border-0 text-end">{{ cash }}</td>
+            </tr>
+            <tr>
+                <td class="border-0 fw-bold text-end" colspan="4">TOTAL</td>
+                <td class="border-0 text-end">{{ total }}</td>
+            </tr>
+        </tfoot>
+    </table>
+{% endblock %}
