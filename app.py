@@ -215,7 +215,7 @@ def buy():
             return redirect("/")
 
         db.execute(
-            "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO transactions (time, userid, type, stock, shares, cost, name) VALUES (?, ?, ?, ?, ?, ?, ?)",
             timestamp,
             userid,
             "buy",
@@ -514,7 +514,7 @@ def sell():
             return redirect("/")
 
         db.execute(
-            "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO transactions (time, userid, type, stock, shares, cost, name) VALUES (?, ?, ?, ?, ?, ?, ?)",
             timestamp,
             userid,
             "sell",
@@ -523,6 +523,7 @@ def sell():
             price,
             name,
         )
+
         cash = round(float(cash + price), 2)
         db.execute("UPDATE users SET cash = ? WHERE id = ?", cash, userid)
         flash("Sold!")
