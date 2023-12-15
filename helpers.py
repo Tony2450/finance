@@ -58,6 +58,7 @@ def lookup(symbol):
     # Query API
     try:
         response = requests.get(url, cookies={"session": str(uuid.uuid4())}, headers={"User-Agent": "python-requests", "Accept": "*/*"})
+        
         response.raise_for_status()
 
         # CSV header: Date,Open,High,Low,Close,Adj Close,Volume

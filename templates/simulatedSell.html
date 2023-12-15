@@ -1,14 +1,14 @@
 {% extends "layout.html" %}
 
 {% block title %}
-Buy
+Simulated Sell
 {% endblock %}
 
 {% block main %}
 <form action="/sell" method="post">
     <div class="mb-3">
         <select autocomplete="off" autofocus class="form-select mx-auto w-auto" id="sellsymbol" name="symbol" required>
-            <option disabled selected value="">Symbol (Name)</option>
+            <option selected value="{{symbol}}">{{symbol}} ({{name}})</option>
             {% for stock in portfoliostocks %}
             <option value="{{stock['symbol']}}">{{stock['symbol']}} ({{stock['name']}})</option>
             {% endfor %}
@@ -16,14 +16,23 @@ Buy
     </div>
     <div class="mb-3">
         <input autocomplete="off" class="form-control mx-auto w-auto" min="1" name="shares" placeholder="Shares"
-            type="number">
+            type="number" value="{{shares}}">
     </div>
     <select autocomplete="off" autofocus class="form-select mx-auto w-auto mb-3" id="ordertype" name="ordertype"
         required>
         <option disabled selected value="">Order Type</option>
-        <option value="Purchase">Sale</option>
+        <option value="Sale">Sale</option>
         <option value="Simulation">Simulation</option>
     </select>
     <button class="btn btn-primary" type="submit">Sell</button>
 </form>
+<div class="mb-3"></div>
+
+<div class="mb-3 p-3">
+    A share of {{ symbol }} ({{ name }}) is worth {{ individualPrice }}
+</div>
+<div class="mb-3">
+    Selling {{ shares }} shares of {{ symbol }} ({{ name }}) would be worth {{ cost }} and leave you with {{ newBudget }}
+    cash
+</div>
 {% endblock %}

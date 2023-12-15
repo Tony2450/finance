@@ -9,6 +9,7 @@
         <thead>
             <tr>
                 <th class="text-start">Symbol</th>
+                <th class="text-start">Name</th>
                 <th class="text-start d-none d-md-block">Transaction</th>
                 <th class="text-end">Shares</th>
                 <th class="text-end">Price</th>
@@ -19,6 +20,7 @@
             {% for transaction in transactions %}
             <tr>
                 <td class="text-start">{{ transaction["stock"] }}</td>
+                <td class="text-start">{{ transaction["name"] }}</td>
                 <td class="text-start d-none d-md-block">{{ transaction["type"] }}</td>
                 <td class="text-end">{{ transaction["shares"] }}</td>
                 <td class="text-end">{{ transaction["cost"] }}</td>

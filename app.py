@@ -7,6 +7,7 @@ from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from helpers import apology, login_required, lookup, usd
+from TickerSymbols import TickerSymbols
 
 # Configure application
 app = Flask(__name__)
@@ -24,7 +25,7 @@ db = SQL("sqlite:///finance.db")
 
 
 # Define helper function to update portfolio according to buy/sell, returns True if successfull, False if failed
-def updateportfolio(userid, transaction, symbol, shares):
+def updateportfolio(userid, transaction, symbol, name, shares):
     # Detect what type of transaction is being performed
     if transaction == "buy":
         # Check if stock exists in user's portfolio
@@ -49,10 +50,11 @@ def updateportfolio(userid, transaction, symbol, shares):
         else:
             # Else create the row in the table
             db.execute(
-                "INSERT INTO portfolio (userid, symbol, count) VALUES (?, ?, ?)",
+                "INSERT INTO portfolio (userid, symbol, count, name) VALUES (?, ?, ?, ?)",
                 userid,
                 symbol,
                 shares,
+                name,
             )
             return True
     elif transaction == "sell":
@@ -152,36 +154,42 @@ def index():
 def buy():
     """Buy shares of stock"""
     # Get symbol and shares from form
+    userid = session["user_id"]
+    budget = db.execute("SELECT cash FROM users WHERE id = ?", userid)
     if request.method == "POST":
         symbol = request.form.get("symbol").upper()
         shares = request.form.get("shares")
+        orderType = request.form.get("ordertype")
+
+        if orderType == "Simulation":
+            return simulated(symbol, shares, "buy")
+
         # Check for invalid inputs
         if not symbol:
             flash("Please input a symbol to buy shares")
-            return redirect("/buy", code=400)
+            return redirect("/buy")
         stock = lookup(symbol)
         if stock == None:
             flash("Invalid symbol")
-            return redirect("/buy", code=400)
+            return redirect("/buy")
         try:
             if not (shares.isnumeric() and int(shares) > 0):
                 flash("Please input a whole number of shares greater than 0")
-                return redirect("/buy", code=400)
+                return redirect("/buy")
         except ValueError:
             flash("Not a valid number")
-            return redirect("/buy", code=400)
+            return redirect("/buy")
 
-        # Get user cash
-        userid = session["user_id"]
-        budget = db.execute("SELECT cash FROM users WHERE id = ?", userid)
         cost = round(float(stock["price"] * int(shares)), 2)
 
         # Check funds
         if cost > budget[0]["cash"]:
             flash("Insufficient funds")
-            return redirect("/buy", code=400)
+            return redirect("/buy")
 
         # Use local timezone if possible
+        stockdict = list(filter(lambda x: x["symbol"] == symbol, TickerSymbols))
+        name = stockdict[0]["name"]
         try:
             timezn = os.environ["TZ"]
             timestamp = datetime.datetime.now(pytz.timezone(timezn))
@@ -189,38 +197,122 @@ def buy():
             # If key error from 'TZ', use US east
             timestamp = datetime.datetime.now(pytz.timezone("US/Eastern"))
             db.execute(
-                "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO transactions (time, userid, type, stock, shares, cost, name) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 timestamp,
                 userid,
                 "buy",
                 symbol,
                 shares,
                 cost,
+                name,
             )
             budget[0]["cash"] = round(float(budget[0]["cash"] - cost), 2)
             db.execute(
                 "UPDATE users SET cash = ? WHERE id = ?", budget[0]["cash"], userid
             )
             flash("Purchase successful")
-            updateportfolio(userid, "buy", symbol, int(shares))
+            updateportfolio(userid, "buy", symbol, name, int(shares))
             return redirect("/")
 
         db.execute(
-            "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
             timestamp,
             userid,
             "buy",
             symbol,
             shares,
             cost,
+            name,
         )
         budget[0]["cash"] = round(float(budget[0]["cash"] - cost), 2)
         db.execute("UPDATE users SET cash = ? WHERE id = ?", budget[0]["cash"], userid)
         flash("Purchase successful")
-        updateportfolio(userid, "buy", symbol, int(shares))
+        updateportfolio(userid, "buy", symbol, name, int(shares))
         return redirect("/")
 
-    return render_template("buy.html")
+    return render_template("buy.html", cash=usd(budget[0]["cash"]))
+
+
+def simulated(symbol: str, shares: str, transaction: str):
+    if not symbol:
+        flash("Please input a symbol to simulate buying/selling shares")
+        return redirect("/" + transaction)
+
+    stock = lookup(symbol)
+
+    if stock == None:
+        flash("Invalid symbol")
+        return redirect("/" + transaction)
+
+    try:
+        if not (shares.isnumeric() and int(shares) > 0):
+            flash("Please input a whole number of shares greater than 0")
+            return redirect("/" + transaction)
+    except ValueError:
+        flash("Not a valid number")
+        return redirect("/" + transaction)
+
+    stockdict = list(filter(lambda x: x["symbol"] == symbol, TickerSymbols))
+    name = stockdict[0]["name"]
+
+    # Get user cash
+    userid = session["user_id"]
+    budget = db.execute("SELECT cash FROM users WHERE id = ?", userid)
+    cost = round(float(stock["price"] * int(shares)), 2)
+
+    if transaction == "buy":
+        if cost > budget[0]["cash"]:
+            flash("Insufficient funds")
+            return redirect("/" + transaction)
+
+        newBudget = round(float(budget[0]["cash"] - cost), 2)
+        individualPrice = round(float(stock["price"]), 2)
+        return render_template(
+            "simulatedBuy.html",
+            symbol=symbol,
+            shares=int(shares),
+            name=name,
+            cost=usd(cost),
+            newBudget=usd(newBudget),
+            individualPrice=usd(individualPrice),
+            cash=usd(budget[0]["cash"]),
+        )
+    elif transaction == "sell":
+        if not db.execute(
+            "SELECT * FROM portfolio WHERE userid = ? AND symbol = ?", userid, symbol
+        ):
+            flash("You do not own this stock")
+            return redirect("/" + transaction)
+
+        count = db.execute(
+            "SELECT count FROM portfolio WHERE userid = ? AND symbol = ?",
+            userid,
+            symbol,
+        )
+        # Check if sell count > then user count
+        if count[0]["count"] < int(shares):
+            flash("You do not own enough shares for this transaction")
+            return redirect("/" + transaction)
+
+        newBudget = round(float(budget[0]["cash"] + cost), 2)
+        individualPrice = round(float(stock["price"]), 2)
+
+        portfoliostocks = db.execute(
+            "SELECT symbol, name FROM portfolio WHERE userid = ? AND NOT count = 0",
+            userid,
+        )
+
+        return render_template(
+            "simulatedSell.html",
+            portfoliostocks=portfoliostocks,
+            symbol=symbol,
+            shares=int(shares),
+            name=name,
+            cost=usd(cost),
+            newBudget=usd(newBudget),
+            individualPrice=usd(individualPrice),
+            cash=usd(budget[0]["cash"]),
+        )
 
 
 @app.route("/history")
@@ -228,6 +320,7 @@ def buy():
 def history():
     """Show history of transactions"""
     userid = session["user_id"]
+    budget = db.execute("SELECT cash FROM users WHERE id = ?", userid)
     transactions = db.execute(
         "SELECT * FROM transactions WHERE userid = ? ORDER BY time DESC, cost", userid
     )
@@ -236,7 +329,9 @@ def history():
         transaction["type"] = str(transaction["type"]).upper()
         if transaction["type"] == "SELL":
             transaction["shares"] *= -1
-    return render_template("history.html", transactions=transactions)
+    return render_template(
+        "history.html", transactions=transactions, cash=usd(budget[0]["cash"])
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -294,20 +389,31 @@ def logout():
 @login_required
 def quote():
     """Get stock quote."""
+    userid = session["user_id"]
+    budget = db.execute("SELECT cash FROM users WHERE id = ?", userid)
     if request.method == "POST":
         symbol = request.form.get("symbol").upper()
         if not symbol:
             flash("Please submit a stock's symbol to quote")
-            return redirect("/quote", code=400)
+            return redirect("/quote")
 
         quote = lookup(symbol)
         if quote == None:
             flash("Invalid symbol, try again")
-            return redirect("/quote", code=400)
+            return redirect("/quote")
 
-        return render_template("quoted.html", quote=quote, price=usd(quote["price"]))
+        stockdict = list(filter(lambda x: x["symbol"] == symbol, TickerSymbols))
+        name = stockdict[0]["name"]
 
-    return render_template("quote.html")
+        return render_template(
+            "quoted.html",
+            quote=quote,
+            name=name,
+            price=usd(quote["price"]),
+            cash=usd(budget[0]["cash"]),
+        )
+
+    return render_template("quote.html", cash=usd(budget[0]["cash"]))
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -320,14 +426,14 @@ def register():
         if not (username and password and cpassword == password):
             if username:
                 flash("Registration unsuccessful, passwords do not match")
-                return redirect("/register", code=400)
+                return redirect("/register")
             else:
                 flash("Registration unsuccessful, invalid username")
-                return redirect("/register", code=400)
+                return redirect("/register")
 
         if db.execute("SELECT username FROM users WHERE username = ?", username):
             flash("Username already in use")
-            return redirect("/register", code=400)
+            return redirect("/register")
 
         passhash = generate_password_hash(password)
 
@@ -351,28 +457,37 @@ def register():
 def sell():
     """Sell shares of stock"""
     userid = session["user_id"]
+    budget = db.execute("SELECT cash FROM users WHERE id = ?", userid)
     if request.method == "POST":
         # Get symbol and shares from form
         symbol = request.form.get("symbol").upper()
         shares = request.form.get("shares")
+        orderType = request.form.get("ordertype")
+
+        if orderType == "Simulation":
+            return simulated(symbol, shares, "sell")
+
         if not symbol:
             flash("Please input a symbol to sell shares")
-            return redirect("/sell", code=400)
+            return redirect("/sell")
         stock = lookup(symbol)
         if stock == None:
             flash("Invalid symbol")
-            return redirect("/sell", code=400)
+            return redirect("/sell")
         try:
             if not (shares.isnumeric() and int(shares) > 0):
                 flash("Please input a number of shares greater than 0")
-                return redirect("/sell", code=400)
+                return redirect("/sell")
         except ValueError:
             flash("Not a valid number")
-            return redirect("/sell", code=400)
+            return redirect("/sell")
+
+        stockdict = list(filter(lambda x: x["symbol"] == symbol, TickerSymbols))
+        name = stockdict[0]["name"]
 
         # If portfolio update unsuccessfull, sell transaction has failed
-        if not updateportfolio(userid, "sell", symbol, int(shares)):
-            return redirect("/sell", code=400)
+        if not updateportfolio(userid, "sell", symbol, name, int(shares)):
+            return redirect("/sell")
 
         price = round(float(stock["price"] * int(shares)), 2)
         cashrow = db.execute("SELECT cash FROM users WHERE id = ?", userid)
@@ -384,13 +499,14 @@ def sell():
         except KeyError:
             timestamp = datetime.datetime.now(pytz.timezone("US/Eastern"))
             db.execute(
-                "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO transactions (time, userid, type, stock, shares, cost, name) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 timestamp,
                 userid,
                 "sell",
                 symbol,
                 shares,
                 price,
+                name,
             )
             cash = round(float(cash + price), 2)
             db.execute("UPDATE users SET cash = ? WHERE id = ?", cash, userid)
@@ -398,13 +514,14 @@ def sell():
             return redirect("/")
 
         db.execute(
-            "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO transactions (time, userid, type, stock, shares, cost) VALUES (?, ?, ?, ?, ?, ?, ?)",
             timestamp,
             userid,
             "sell",
             symbol,
             shares,
             price,
+            name,
         )
         cash = round(float(cash + price), 2)
         db.execute("UPDATE users SET cash = ? WHERE id = ?", cash, userid)
@@ -412,6 +529,12 @@ def sell():
         return redirect("/")
 
     portfoliostocks = db.execute(
-        "SELECT symbol FROM portfolio WHERE userid = ? AND NOT count = 0", userid
+        "SELECT symbol, name FROM portfolio WHERE userid = ? AND NOT count = 0", userid
     )
-    return render_template("sell.html", portfoliostocks=portfoliostocks)
+    return render_template(
+        "sell.html", portfoliostocks=portfoliostocks, cash=usd(budget[0]["cash"])
+    )
+
+
+if __name__ == "__main__":
+    app.run(debug=True)

@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 
 {% block title %}
-Buy
+Simulated Buy
 {% endblock %}
 
 {% block main %}
@@ -9,20 +9,30 @@ Buy
     <div class="mb-3">
         <label for="browser" class="form-label">Choose your symbol from the list:</label>
         <input autocomplete="off" autofocus class="form-control mx-auto w-auto" id="search" name="symbol"
-            placeholder="Symbol" type="text" list="symbols">
+            placeholder="Symbol" type="text" list="symbols" value="{{symbol}}">
         <datalist id="symbols">
         </datalist>
     </div>
     <div class="mb-3">
         <input autocomplete="off" class="form-control mx-auto w-auto" min="1" name="shares" placeholder="Shares"
-            type="number">
+            type="number" value="{{shares}}">
     </div>
     <label for="browser" class="form-label">Choose your order type:</label>
-    <select autocomplete="off" autofocus class="form-select mx-auto w-auto mb-3" id="ordertype" name="ordertype" required>
+    <select autocomplete="off" autofocus class="form-select mx-auto w-auto mb-3" id="ordertype" name="ordertype"
+        required>
         <option disabled selected value="">Order Type</option>
         <option value="Purchase">Purchase</option>
         <option value="Simulation">Simulation</option>
     </select>
     <button class="btn btn-primary" type="submit">Buy</button>
 </form>
+<div class="mb-3"></div>
+
+<div class="mb-3 p-3">
+    A share of {{ symbol }} ({{ name }}) costs {{ individualPrice }}
+</div>
+<div class="mb-3">
+    Purchasing {{ shares }} shares of {{ symbol }} ({{ name }}) would cost {{ cost }} and leave you with {{ newBudget }}
+    cash
+</div>
 {% endblock %}
